@@ -19,23 +19,33 @@ np.random.seed(RNG_SEED)
 
 
 
-# load dataset
+# data setup
+TRAIN_RATIO = 0.7
+VAL_RATIO = 0.05
+TEST_RATIO = 1 - (TRAIN_RATIO + VAL_RATIO)
+
 FEATURE_SCALE = np.array([4095, 8, 255, 255, 255, 255, 255, 255, 255, 255])
 
+# type: (pd.DataFrame, float, float) -> tuple[pd.DataFrame]
+def train_val_test_split(data, train_ratio, val_ratio):
+	train_data = data.iloc[:int(train_ratio*len(data.index)), :]
+	val_data = data.iloc[int(train_ratio*len(data.index)):int((train_ratio+val_ratio)*len(data.index)), :]
+	test_data = data.iloc[int((train_ratio+val_ratio)*len(data.index)):, :]
+	return (train_data, val_data, test_data)
+
+# type: (pd.DataFrame) -> tuple[np.ndarray]
+def standard_split(data):
+	x = data.iloc[:, :-1].to_numpy() / FEATURE_SCALE
+	y = data.iloc[:, -1].to_numpy()
+	return (x, y)
+
 data = pd.read_csv('car_hacking_dataset/car_hacking_dataset.csv', header=None)
-data = data.sample(frac=1)
+data = data.sample(frac=1)#[:25_000]
 
-data_x = data.iloc[:, :-1]
-data_x = data_x.to_numpy() / FEATURE_SCALE
-data_y = data.iloc[:, -1]
-data_y = data_y.to_numpy()
-
-train_x = data_x[:int(0.7*len(data_x))]
-train_y = data_y[:int(0.7*len(data_y))]
-val_x = data_x[int(0.7*len(data_x)):int(0.7*len(data_x))+1024]
-val_y = data_y[int(0.7*len(data_y)):int(0.7*len(data_y))+1024]
-test_x = data_x[int(0.7*len(data_x))+1024:]
-test_y = data_y[int(0.7*len(data_y))+1024:]
+(train_data, val_data, test_data) = train_val_test_split(data, TRAIN_RATIO, VAL_RATIO)
+(train_x, train_y) = standard_split(train_data)
+(val_x, val_y) = standard_split(val_data)
+(test_x, test_y) = standard_split(test_data)
 
 print(train_x.shape, train_y.shape, 'train')
 print(val_x.shape, val_y.shape, 'validation')
@@ -44,28 +54,30 @@ print(test_x.shape, test_y.shape, 'test')
 
 
 # define model
-hidden_activation = 'relu'
-l2_lam = 0.001 # must be defined here because of keras implementation
+HIDDEN_ACT = 'relu'
+L2_LAM = 0.001 # must be defined here because of keras implementation
+LR = 0.001
 
-model_x = layers.Input(shape=(10,), name='baseline_model_input')
-model_y = layers.Dense(16, activation=hidden_activation, kernel_regularizer=regularizers.l2(l2_lam), name='baseline_model_hidden1')(model_x)
-model_y = layers.Dense(16, activation=hidden_activation, kernel_regularizer=regularizers.l2(l2_lam), name='baseline_model_hidden2')(model_y)
-model_y = layers.Dense(16, activation=hidden_activation, kernel_regularizer=regularizers.l2(l2_lam), name='baseline_model_hidden3')(model_y)
-model_y = layers.Dense(16, activation=hidden_activation, kernel_regularizer=regularizers.l2(l2_lam), name='baseline_model_hidden4')(model_y)
-model_y = layers.Dense(5, activation='softmax', kernel_regularizer=regularizers.l2(l2_lam), name='baseline_model_output')(model_y)
+loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
+optimizer = tf.keras.optimizers.AdamW(learning_rate=LR)
 
-model = tf.keras.Model(model_x, model_y, name='baseline_ids')
+model_x = layers.Input(shape=(10,), name='baseline_ids_tfv2_input')
+model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='baseline_ids_tfv2_hidden1')(model_x)
+model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='baseline_ids_tfv2_hidden2')(model_y)
+model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='baseline_ids_tfv2_hidden3')(model_y)
+model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='baseline_ids_tfv2_hidden4')(model_y)
+model_y = layers.Dense(5, activation='softmax', kernel_regularizer=regularizers.l2(l2_lam), name='baseline_ids_tfv2_output')(model_y)
+model = tf.keras.Model(model_x, model_y, name='baseline_ids_tfv2')
 model.summary()
+model.compile(loss=loss_object, optimizer=optimizer, metrics=['accuracy'])
 
 
 
 # train model
-lr = 0.001
-epochs = 5
-batch_size = 512
+EPOCHS = 5
+BATCH_SIZE = 512
 
-model.compile(optimizer=optimizers.AdamW(learning_rate=lr), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-history = model.fit(train_x, train_y, epochs=epochs, batch_size=batch_size, validation_data=(val_x, val_y))
+history = model.fit(train_x, train_y, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_data=(val_x, val_y))
 
 
 
@@ -89,15 +101,13 @@ print(test_cfm)
 # plot results
 plt.plot(history.history['loss'], label='train')
 plt.plot(history.history['val_loss'], label='validation', c='r')
-plt.scatter([epochs-1], [test_loss], marker='x', label='test', c='g')
+plt.scatter([len(history.history['loss'])-1], [test_loss], marker='x', label='test', c='g')
 plt.legend()
 plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.show()
-#plt.savefig(f'baseline_ids_tfv2_[acc{test_accuracy:4f}]'.replace('.','_')+'.png')
 
 
 
 # save model
-#model.save('baseline_ids_tfv2.keras')
 model.save_weights('baseline_ids_tfv2.weights.h5')

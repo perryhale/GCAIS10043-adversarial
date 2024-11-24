@@ -39,8 +39,8 @@ def mask_fn(x):
 
 data = pd.read_csv('car_hacking_dataset/car_hacking_dataset.csv', header=None)
 data = data.sample(frac=1)[:10_000]
-data_ben = data.loc[data[10] == 0] # where flag = 0
-data_mal = data.loc[data[10] > 0] # where flag = 1
+data_ben = data.loc[data[10] == 0]
+data_mal = data.loc[data[10] >= 1]
 
 ben_x = data_ben.iloc[:, :-1]
 ben_x = ben_x.to_numpy() / FEATURE_SCALE
@@ -76,7 +76,7 @@ model.summary()
 
 
 # setup art wrapper
-EPS = 64/255
+EPS = 16/255
 ITER = 7
 
 model = TensorFlowV2Classifier(model=model, nb_classes=5, input_shape=(10,), loss_object=tf.keras.losses.SparseCategoricalCrossentropy(), clip_values=(0,1))
