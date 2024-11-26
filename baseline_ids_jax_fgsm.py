@@ -74,7 +74,7 @@ print(test_x.shape, test_y.shape, 'test')
 
 
 # initialise model
-with open('baseline_ids_jax.weights.pkl', 'rb') as f:
+with open('models/baseline_ids_jax.weights.pkl', 'rb') as f:
 	params = pickle.load(f)
 model = jax.vmap(baseline_ids, in_axes=(None, 0))
 

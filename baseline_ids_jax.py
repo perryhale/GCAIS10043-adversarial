@@ -191,5 +191,5 @@ plt.show()
 
 
 # save parameters
-with open('baseline_ids_jax.weights.pkl', 'wb') as f:
+with open('models/baseline_ids_jax.weights.pkl', 'wb') as f:
 	pickle.dump(params, f)

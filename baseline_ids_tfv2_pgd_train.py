@@ -75,12 +75,17 @@ def adversarial_split(data):
 	return ((ben_x, ben_y, ben_mask), (mal_x, mal_y, mal_yt, mal_mask))
 
 data = pd.read_csv('car_hacking_dataset/car_hacking_dataset.csv', header=None)
-data = data.sample(frac=1)#[:25_000]
+data = data.sample(frac=1)
 
 (train_data, val_data, test_data) = train_val_test_split(data, TRAIN_RATIO, VAL_RATIO)
 ((train_ben_x, train_ben_y, train_ben_mask), (train_mal_x, train_mal_y, train_mal_yt, train_mal_mask)) = adversarial_split(train_data)
 (val_x, val_y) = standard_split(val_data)
 (test_x, test_y) = standard_split(test_data)
+
+# # undersampling
+# train_ben_x = train_ben_x[:int(0.25*len(train_mal_x))]
+# train_ben_y = train_ben_y[:int(0.25*len(train_mal_y))]
+# train_ben_mask = train_ben_mask[:int(0.25*len(train_mal_mask))]
 
 print(train_ben_x.shape, train_ben_y.shape, 'train (benign)')
 print(train_mal_x.shape, train_mal_y.shape, 'train (malicious)')
@@ -97,53 +102,54 @@ LR = 0.001
 loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
 optimizer = tf.keras.optimizers.AdamW(learning_rate=LR)
 
-model_x = layers.Input(shape=(10,), name='baseline_ids_tfv2_pgd_train_input')
-model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='baseline_ids_tfv2_pgd_train_hidden1')(model_x)
-model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='baseline_ids_tfv2_pgd_train_hidden2')(model_y)
-model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='baseline_ids_tfv2_pgd_train_hidden3')(model_y)
-model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='baseline_ids_tfv2_pgd_train_hidden4')(model_y)
-model_y = layers.Dense(5, activation='softmax', kernel_regularizer=regularizers.l2(L2_LAM), name='baseline_ids_tfv2_pgd_train_output')(model_y)
-model = tf.keras.Model(model_x, model_y, name='baseline_ids_tfv2_pgd_train')
+model_x = layers.Input(shape=(10,), name='models/baseline_ids_tfv2_pgd_train_input')
+model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='models/baseline_ids_tfv2_pgd_train_hidden1')(model_x)
+model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='models/baseline_ids_tfv2_pgd_train_hidden2')(model_y)
+model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='models/baseline_ids_tfv2_pgd_train_hidden3')(model_y)
+model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='models/baseline_ids_tfv2_pgd_train_hidden4')(model_y)
+model_y = layers.Dense(5, activation='softmax', kernel_regularizer=regularizers.l2(L2_LAM), name='models/baseline_ids_tfv2_pgd_train_output')(model_y)
+model = tf.keras.Model(model_x, model_y, name='models/baseline_ids_tfv2_pgd_train')
 model.summary()
 model.compile(loss=loss_object, optimizer=optimizer, metrics=['accuracy'])
 
 
 
 # adversarially train model
-EPS_MIN = 1e-9
-EPS_MAX = 1.0
-EPS_RES = 32
-PGD_ITER = 3
+OUTER_EPOCHS = 1
 INNER_EPOCHS = 1
 ADV_COUNT = 1
+EPS_RES = 32
+EPS_MIN = 1e-9
+EPS_MAX = 1.0
+PGD_ITER = 3
 BATCH_SIZE = 512
 VERBOSE = True
 
 history = {'loss':[], 'val_loss':[], 'accuracy':[], 'val_accuracy':[]}
 
-for e in tqdm(np.linspace(EPS_MIN, EPS_MAX, num=EPS_RES)):
-	inner_iterable = tqdm(range(INNER_EPOCHS)) if INNER_EPOCHS > 1 else range(INNER_EPOCHS)
-	for i in inner_iterable:
-		
-		# setup art wrapper
-		art_model = TensorFlowV2Classifier(model=model, input_shape=(10,), nb_classes=5, loss_object=loss_object, optimizer=optimizer, clip_values=(0,1))
-		pgd_untargeted = ProjectedGradientDescent(estimator=art_model, eps=e, eps_step=(e/PGD_ITER), max_iter=PGD_ITER, num_random_init=1, targeted=False, batch_size=8192, verbose=VERBOSE)
-		pgd_targeted = ProjectedGradientDescent(estimator=art_model, eps=e, eps_step=(e/PGD_ITER), max_iter=PGD_ITER, num_random_init=1, targeted=True, batch_size=8192, verbose=VERBOSE)
-		
-		# generate adversarial samples
-		train_ben_adv_x = enforce_res(np.concatenate([pgd_untargeted.generate(train_ben_x, mask=train_ben_mask) for i in range(ADV_COUNT)]), FEATURE_SCALE)
-		train_mal_adv_x = enforce_res(np.concatenate([pgd_targeted.generate(train_mal_x, train_mal_yt, mask=train_mal_mask) for i in range(ADV_COUNT)]), FEATURE_SCALE)
-		
-		# concatenate all samples
-		epoch_x = np.concatenate([train_ben_x, train_mal_x, train_ben_adv_x, train_mal_adv_x])
-		epoch_y = np.concatenate([train_ben_y, train_mal_y, np.concatenate([train_ben_y for i in range(ADV_COUNT)]), np.concatenate([train_mal_y for i in range(ADV_COUNT)])])
-		
-		# fit to extended set
-		epoch_hist = model.fit(epoch_x, epoch_y, epochs=1, batch_size=BATCH_SIZE, validation_data=(val_x, val_y), verbose=int(VERBOSE))
-		
-		# update history
-		for k in history.keys():
-			history[k].extend(epoch_hist.history[k])
+for i in tqdm(range(OUTER_EPOCHS)) if OUTER_EPOCHS > 1 else [0]:
+	for e in tqdm(np.linspace(EPS_MIN, EPS_MAX, num=EPS_RES)):
+		for j in tqdm(range(INNER_EPOCHS)) if INNER_EPOCHS > 1 else [0]:
+			
+			# setup art wrapper
+			art_model = TensorFlowV2Classifier(model=model, input_shape=(10,), nb_classes=5, loss_object=loss_object, optimizer=optimizer, clip_values=(0,1))
+			pgd_untargeted = ProjectedGradientDescent(estimator=art_model, eps=e, eps_step=(e/PGD_ITER), max_iter=PGD_ITER, num_random_init=1, targeted=False, batch_size=8192, verbose=VERBOSE)
+			pgd_targeted = ProjectedGradientDescent(estimator=art_model, eps=e, eps_step=(e/PGD_ITER), max_iter=PGD_ITER, num_random_init=1, targeted=True, batch_size=8192, verbose=VERBOSE)
+			
+			# generate adversarial samples
+			train_ben_adv_x = enforce_res(np.concatenate([pgd_untargeted.generate(train_ben_x, mask=train_ben_mask) for i in range(ADV_COUNT)]), FEATURE_SCALE)
+			train_mal_adv_x = enforce_res(np.concatenate([pgd_targeted.generate(train_mal_x, train_mal_yt, mask=train_mal_mask) for i in range(ADV_COUNT)]), FEATURE_SCALE)
+			
+			# concatenate all samples
+			epoch_x = np.concatenate([train_ben_x, train_mal_x, train_ben_adv_x, train_mal_adv_x])
+			epoch_y = np.concatenate([train_ben_y, train_mal_y, np.concatenate([train_ben_y for i in range(ADV_COUNT)]), np.concatenate([train_mal_y for i in range(ADV_COUNT)])])
+			
+			# fit to extended set
+			epoch_hist = model.fit(epoch_x, epoch_y, epochs=1, batch_size=BATCH_SIZE, validation_data=(val_x, val_y), verbose=int(VERBOSE))
+			
+			# update history
+			for k in history.keys():
+				history[k].extend(epoch_hist.history[k])
 
 
 
@@ -154,6 +160,7 @@ test_cfm = confusion_matrix(test_y, np.argmax(model.predict(test_x), axis=-1), l
 print(f'Test loss: {test_loss}')
 print(f'Test accuracy: {test_accuracy}')
 print(test_cfm)
+# natural sampling, 1,32,1
 # Test loss: 0.17924007773399353
 # Test accuracy: 0.9733608365058899
 # [[3777598   17687     121   11715      50]
@@ -176,4 +183,9 @@ plt.show()
 
 
 # save model
-model.save_weights('baseline_ids_tfv2_pgd_train.weights.h5')
+model.save_weights('models/baseline_ids_tfv2_pgd_train.weights.h5') # natural sample, outer 1, res 32, inner 1
+#model.save_weights('models/baseline_ids_tfv2_pgd_train_us.weights.h5') # undersample, outer 1, res 32, inner 1
+#model.save_weights('models/baseline_ids_tfv2_pgd_train_us_i5.weights.h5') # undersample, outer 1, res 32, inner 5
+#model.save_weights('models/baseline_ids_tfv2_pgd_train_us_e5.weights.h5') # undersample, outer 5, res 32, inner 1
+
+# to run: oversample with stratified sampling / smote

@@ -70,7 +70,7 @@ model_y = layers.Dense(16, activation='relu', name='baseline_model_hidden4')(mod
 model_y = layers.Dense(5, activation='softmax', name='baseline_model_output')(model_y)
 
 model = tf.keras.Model(model_x, model_y, name='baseline_ids')
-model.load_weights('baseline_ids_tfv2.weights.h5')
+model.load_weights('models/baseline_ids_tfv2.weights.h5')
 model.summary()
 
 

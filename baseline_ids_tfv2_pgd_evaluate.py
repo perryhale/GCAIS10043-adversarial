@@ -83,22 +83,26 @@ data = data.sample(frac=1)[:25_000]
 
 print(train_x.shape, train_y.shape, 'train')
 print(val_x.shape, val_y.shape, 'validation')
-print(test_ben_x.shape, test_ben_y.shape, 'ben test')
-print(test_mal_x.shape, test_mal_y.shape, 'mal test')
+print(test_ben_x.shape, test_ben_y.shape, 'test (benign)')
+print(test_mal_x.shape, test_mal_y.shape, 'test (malicious)')
 
 
 
 # evaluate models
-MODELS = ['baseline_ids_tfv2.weights.h5', 'baseline_ids_tfv2_pgd_train.weights.h5']
+MODEL_PATH = 'models/'
+MODELS = ['baseline_ids_tfv2.weights.h5', 'baseline_ids_tfv2_pgd_train_us.weights.h5', 'baseline_ids_tfv2_pgd_train_us_i5.weights.h5', 'baseline_ids_tfv2_pgd_train_us_e5.weights.h5']
+EPS_RES = 32
 EPS_MIN = 1e-9
 EPS_MAX = 1.0
-EPS_RES = 32
 PGD_ITER = 7
 VERBOSE = True
 
 model_history = {k:{} for k in MODELS}
 
 for k in MODELS:
+	
+	# append path prefix
+	k = MODEL_PATH + k
 	
 	# define model
 	model_x = layers.Input(shape=(10,), name=f'{k}_input')

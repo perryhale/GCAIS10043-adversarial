@@ -61,13 +61,13 @@ LR = 0.001
 loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
 optimizer = tf.keras.optimizers.AdamW(learning_rate=LR)
 
-model_x = layers.Input(shape=(10,), name='baseline_ids_tfv2_input')
-model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='baseline_ids_tfv2_hidden1')(model_x)
-model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='baseline_ids_tfv2_hidden2')(model_y)
-model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='baseline_ids_tfv2_hidden3')(model_y)
-model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='baseline_ids_tfv2_hidden4')(model_y)
-model_y = layers.Dense(5, activation='softmax', kernel_regularizer=regularizers.l2(l2_lam), name='baseline_ids_tfv2_output')(model_y)
-model = tf.keras.Model(model_x, model_y, name='baseline_ids_tfv2')
+model_x = layers.Input(shape=(10,), name='models/baseline_ids_tfv2_input')
+model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='models/baseline_ids_tfv2_hidden1')(model_x)
+model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='models/baseline_ids_tfv2_hidden2')(model_y)
+model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='models/baseline_ids_tfv2_hidden3')(model_y)
+model_y = layers.Dense(16, activation=HIDDEN_ACT, kernel_regularizer=regularizers.l2(L2_LAM), name='models/baseline_ids_tfv2_hidden4')(model_y)
+model_y = layers.Dense(5, activation='softmax', kernel_regularizer=regularizers.l2(l2_lam), name='models/baseline_ids_tfv2_output')(model_y)
+model = tf.keras.Model(model_x, model_y, name='models/baseline_ids_tfv2')
 model.summary()
 model.compile(loss=loss_object, optimizer=optimizer, metrics=['accuracy'])
 
@@ -110,4 +110,4 @@ plt.show()
 
 
 # save model
-model.save_weights('baseline_ids_tfv2.weights.h5')
+model.save_weights('models/baseline_ids_tfv2.weights.h5')
